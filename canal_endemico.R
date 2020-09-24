@@ -58,7 +58,7 @@ canal_endemico$MES_DIA <- NULL
 canal_endemico$OBITOS <- NULL
 
 canal_endemico <- subset(canal_endemico, canal_endemico$DATA > Sys.Date() &
-			 	canal_endemico$DATA <= (Sys.Date()+14))
+			 	canal_endemico$DATA <= (Sys.Date()+30))
 
 canal_endemico <- canal_endemico %>% 
 	group_by(REGIAO) %>%

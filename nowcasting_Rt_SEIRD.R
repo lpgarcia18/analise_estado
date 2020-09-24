@@ -404,7 +404,7 @@ for(i in 1:16){ # são 16 regiões
 	
 	
 	#Resolvendo as equações diferenciais
-	projecao <- 14
+	projecao <- 60
 	control <- control.dcm(nsteps = projecao, new.mod = SEIRD)
 	mod <- dcm(param, init, control)
 	
@@ -480,7 +480,7 @@ ggplot(projecoes_final, aes(DATA, CUM_OBITOS_CENARIO_3, color = REGIAO))+
 #Óbitos por SRAG
 obitos_proj <- projecoes_final %>% select(REGIAO, DATA, CUM_OBITOS_CENARIO_1, CUM_OBITOS_CENARIO_2, CUM_OBITOS_CENARIO_3)
 obitos_proj <- subset(obitos_proj, obitos_proj$DATA >= Sys.Date() &
-			 	obitos_proj$DATA < (Sys.Date()+15))
+			 	obitos_proj$DATA < (Sys.Date()+31))
 obitos_proj_list <- list()
 for(i in 1:16){ # são 16 regiões
 	obitos_cort <- subset(obitos_proj, as.numeric(obitos_proj$REGIAO) == i)
@@ -594,9 +594,9 @@ ggplot(serie_agrupada_regioes, aes(DATA, CONFIRMADOS, color = REGIAO))+
 ggplot(serie_agrupada_regioes, aes(DATA, TX_CONFIRMADOS_SUSPEITOS, color = REGIAO))+
 	geom_line(size = 1.5)
 
-serie_agrupada_regioes$SENSIBILIDADE <- ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 3, "Moderado",
-					ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 6, "Alto",
-					       ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 9, "Grave", "Gravíssimo")))
+serie_agrupada_regioes$SENSIBILIDADE <- ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 6, "Moderado",
+					ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 9, "Alto",
+					       ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 12, "Grave", "Gravíssimo")))
 
 serie_agrupada_regioes_list <- list()
 for(i in 1:16){ # são 16 regiões
@@ -622,15 +622,106 @@ efeito_desenho$VIGILANCIA_ATIVA <- ifelse(efeito_desenho$EFEITO_DESENHO <= 1, "M
 
 write_xlsx(efeito_desenho,"base/VIGILANCIA_ATIVA.xlsx")
 
+
+#Taxa de ocupação de leitos
+ocupacao_uti <- read_csv("base/ocupacao_uti.csv")
+ocupacao_uti <- subset(ocupacao_uti, ocupacao_uti$classificacao == "uti")
+ocupacao_uti$macrorregiao <- NULL
+ocupacao_uti$classificacao <- NULL
+names(ocupacao_uti) <- c("REGIAO", "TX_OCUPACAO_UTI")
+
+ocupacao_uti$CAPACIDADE_UTI <- ifelse(ocupacao_uti$TX_OCUPACAO_UTI <= 50, "Moderado",
+					ifelse(ocupacao_uti$TX_OCUPACAO_UTI <= 70, "Alto",
+					       ifelse(ocupacao_uti$TX_OCUPACAO_UTI <= 90, "Grave", "Gravíssimo")))
+
+
+
+
+# Análise dos indicadores ---------------------------------------------------
+situacao_indicadores <- obitos_canal_endemico
+situacao_indicadores <- merge(situacao_indicadores, res_base_14_dias, by = c("REGIAO"), all = T)
+situacao_indicadores <- merge(situacao_indicadores, casos_ativos_populacao, by = c("REGIAO"), all = T)
+situacao_indicadores <- merge(situacao_indicadores, serie_agrupada_regioes, by = c("REGIAO"), all = T)
+situacao_indicadores <- merge(situacao_indicadores, efeito_desenho, by = c("REGIAO"), all = T)
+situacao_indicadores <- merge(situacao_indicadores, ocupacao_uti, by = c("REGIAO"), all = T)
+
+
+
+situacao_indicadores <- situacao_indicadores %>% select(REGIAO, GRAVIDADE, CRESCIMENTO, INFECTIVIDADE, SENSIBILIDADE, VIGILANCIA_ATIVA, CAPACIDADE_UTI)
+write_xlsx(situacao_indicadores,"base/situacao_indicadores.xlsx")
+
+pontuacao_indicadores <- situacao_indicadores
+
+pontuacao_indicadores[pontuacao_indicadores$GRAVIDADE == "Moderado", names(pontuacao_indicadores) == "GRAVIDADE"] <- 5 
+pontuacao_indicadores[pontuacao_indicadores$GRAVIDADE == "Alto", names(pontuacao_indicadores) == "GRAVIDADE"] <- 15 
+pontuacao_indicadores[pontuacao_indicadores$GRAVIDADE == "Grave", names(pontuacao_indicadores) == "GRAVIDADE"] <- 30 
+pontuacao_indicadores[pontuacao_indicadores$GRAVIDADE == "Gravíssimo", names(pontuacao_indicadores) == "GRAVIDADE"] <- 50 
+
+pontuacao_indicadores[pontuacao_indicadores$CRESCIMENTO == "Moderado", names(pontuacao_indicadores) == "CRESCIMENTO"] <- 5 
+pontuacao_indicadores[pontuacao_indicadores$CRESCIMENTO == "Alto", names(pontuacao_indicadores) == "CRESCIMENTO"] <- 15
+pontuacao_indicadores[pontuacao_indicadores$CRESCIMENTO == "Grave", names(pontuacao_indicadores) == "CRESCIMENTO"] <- 30 
+pontuacao_indicadores[pontuacao_indicadores$CRESCIMENTO == "Gravíssimo", names(pontuacao_indicadores) == "CRESCIMENTO"] <- 50 
+
+pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Moderado", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 5 
+pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Alto", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 15 
+pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Grave", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 30 
+pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Gravíssimo", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 50 
+
+pontuacao_indicadores[pontuacao_indicadores$SENSIBILIDADE == "Moderado", names(pontuacao_indicadores) == "SENSIBILIDADE"] <- 5 
+pontuacao_indicadores[pontuacao_indicadores$SENSIBILIDADE == "Alto", names(pontuacao_indicadores) == "SENSIBILIDADE"] <- 15 
+pontuacao_indicadores[pontuacao_indicadores$SENSIBILIDADE == "Grave", names(pontuacao_indicadores) == "SENSIBILIDADE"] <- 30 
+pontuacao_indicadores[pontuacao_indicadores$SENSIBILIDADE == "Gravíssimo", names(pontuacao_indicadores) == "SENSIBILIDADE"] <- 50 
+
+pontuacao_indicadores[pontuacao_indicadores$VIGILANCIA_ATIVA == "Moderado", names(pontuacao_indicadores) == "VIGILANCIA_ATIVA"] <- 5 
+pontuacao_indicadores[pontuacao_indicadores$VIGILANCIA_ATIVA == "Alto", names(pontuacao_indicadores) == "VIGILANCIA_ATIVA"] <- 15 
+pontuacao_indicadores[pontuacao_indicadores$VIGILANCIA_ATIVA == "Grave", names(pontuacao_indicadores) == "VIGILANCIA_ATIVA"] <- 30 
+pontuacao_indicadores[pontuacao_indicadores$VIGILANCIA_ATIVA == "Gravíssimo", names(pontuacao_indicadores) == "VIGILANCIA_ATIVA"] <- 50
+
+pontuacao_indicadores[pontuacao_indicadores$CAPACIDADE_UTI == "Moderado", names(pontuacao_indicadores) == "CAPACIDADE_UTI"] <- 5
+pontuacao_indicadores[pontuacao_indicadores$CAPACIDADE_UTI == "Alto", names(pontuacao_indicadores) == "CAPACIDADE_UTI"] <- 15 
+pontuacao_indicadores[pontuacao_indicadores$CAPACIDADE_UTI == "Grave", names(pontuacao_indicadores) == "CAPACIDADE_UTI"] <- 30 
+pontuacao_indicadores[pontuacao_indicadores$CAPACIDADE_UTI == "Gravíssimo", names(pontuacao_indicadores) == "CAPACIDADE_UTI"] <- 50 
+
+
 # Análise das dimensões ---------------------------------------------------
-matriz <- obitos_canal_endemico
-matriz <- merge(matriz, res_base_14_dias, by = c("REGIAO"), all = T)
-matriz <- merge(matriz, casos_ativos_populacao, by = c("REGIAO"), all = T)
-matriz <- merge(matriz, serie_agrupada_regioes, by = c("REGIAO"), all = T)
-matriz <- merge(matriz, efeito_desenho, by = c("REGIAO"), all = T)
+pontuacao_dimensoes <- pontuacao_indicadores
+pontuacao_dimensoes[,-1] <- lapply(pontuacao_dimensoes[,-1], as.numeric) %>% as.data.frame() 
+pontuacao_dimensoes$EVENTO_SENTINELA <- pontuacao_dimensoes$GRAVIDADE
+pontuacao_dimensoes$TRANSMISSIBILIDADE <- (pontuacao_dimensoes$CRESCIMENTO + pontuacao_dimensoes$INFECTIVIDADE)/2
+pontuacao_dimensoes$MONITORAMENTO <- (pontuacao_dimensoes$SENSIBILIDADE + pontuacao_dimensoes$VIGILANCIA_ATIVA)/2
+pontuacao_dimensoes$CAPACIDADE_DE_ATENCAO <- pontuacao_dimensoes$CAPACIDADE_UTI
+pontuacao_dimensoes <- pontuacao_dimensoes %>% dplyr::select(REGIAO, EVENTO_SENTINELA, TRANSMISSIBILIDADE,
+							     MONITORAMENTO, CAPACIDADE_DE_ATENCAO)
 
 
+situacao_dimensoes <- pontuacao_dimensoes
+situacao_dimensoes[situacao_dimensoes > 30] <- "Gravíssimo"
+situacao_dimensoes[situacao_dimensoes <= 30 &
+		   	situacao_dimensoes > 15] <- "Grave"
+situacao_dimensoes[situacao_dimensoes <= 15 &
+		   	situacao_dimensoes > 5] <- "Alto"
+situacao_dimensoes[situacao_dimensoes <= 5] <- "Moderado"
 
-matriz <- matriz %>% select(REGIAO, GRAVIDADE, CRESCIMENTO, INFECTIVIDADE, SENSIBILIDADE, VIGILANCIA_ATIVA)
-write_xlsx(matriz,"base/matriz.xlsx")
+# Análise do indicador sintético ---------------------------------------------------
+pontuacao_sintetica <- pontuacao_dimensoes 
+pontuacao_sintetica$INDICADOR_SINTETICO <- (pontuacao_sintetica$EVENTO_SENTINELA +
+	pontuacao_sintetica$TRANSMISSIBILIDADE +
+	pontuacao_sintetica$MONITORAMENTO +
+	pontuacao_sintetica$CAPACIDADE_DE_ATENCAO)/4
 
+pontuacao_sintetica <- pontuacao_sintetica %>% dplyr::select(REGIAO, INDICADOR_SINTETICO)
+
+situacao_sintetica <- pontuacao_sintetica
+situacao_sintetica[situacao_sintetica > 30] <- "Gravíssimo"
+situacao_sintetica[situacao_sintetica <= 30 &
+		   	situacao_sintetica > 15] <- "Grave"
+situacao_sintetica[situacao_sintetica <= 15 &
+		   	situacao_sintetica > 5] <- "Alto"
+situacao_sintetica[situacao_sintetica <= 5] <- "Moderado"
+
+write_xlsx(situacao_indicadores,"base/situacao_indicadores.xlsx")
+write_xlsx(pontuacao_indicadores,"base/pontuacao_indicadores.xlsx")
+write_xlsx(situacao_dimensoes,"base/situacao_dimensoes.xlsx")
+write_xlsx(pontuacao_dimensoes,"base/pontuacao_dimensoes.xlsx")
+write_xlsx(situacao_sintetica,"base/situacao_sintetica.xlsx")
+write_xlsx(pontuacao_sintetica,"base/pontuacao_sintetica.xlsx")
