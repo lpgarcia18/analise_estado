@@ -484,8 +484,6 @@ obitos_proj <- subset(obitos_proj, obitos_proj$DATA >= Sys.Date() &
 obitos_proj_list <- list()
 for(i in 1:16){ # são 16 regiões
 	obitos_cort <- subset(obitos_proj, as.numeric(obitos_proj$REGIAO) == i)
-	obitos_cort$OBITOS_CENARIO_1 <- obitos_cort$CUM_OBITOS_CENARIO_1 - lag(obitos_cort$CUM_OBITOS_CENARIO_1,1)
-	obitos_cort$OBITOS_CENARIO_2 <- obitos_cort$CUM_OBITOS_CENARIO_2 - lag(obitos_cort$CUM_OBITOS_CENARIO_2,1)
 	obitos_cort$OBITOS_CENARIO_3 <- obitos_cort$CUM_OBITOS_CENARIO_3 - lag(obitos_cort$CUM_OBITOS_CENARIO_3,1)
 	obitos_cort$CUM_OBITOS_CENARIO_1 <- NULL
 	obitos_cort$CUM_OBITOS_CENARIO_2 <- NULL
@@ -496,10 +494,17 @@ obitos_proj <- do.call(rbind, obitos_proj_list)
 
 obitos_proj <- obitos_proj %>% 
 	group_by(REGIAO) %>%
-	summarise(OBITOS_CENARIO_1 = sum(OBITOS_CENARIO_1, na.rm = T),
-		  OBITOS_CENARIO_2 = sum(OBITOS_CENARIO_2, na.rm = T),
-		  OBITOS_CENARIO_3 = sum(OBITOS_CENARIO_3, na.rm = T))
+	summarise(OBITOS_CENARIO_3 = sum(OBITOS_CENARIO_3, na.rm = T))
 
+canal_endemico <- read_excel("base/canal_endemico.xlsx")
+
+obitos_canal_endemico <- merge(obitos_proj, canal_endemico, by = "REGIAO", all = T)
+
+obitos_canal_endemico$GRAVIDADE <- ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$PRIM_QUARTIL, "Moderado",
+					ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$SEGUND_QUARTIL, "Alto",
+					       ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$TERC_QUARTIL, "Grave", "Gravíssimo")))
+
+write_xlsx(obitos_canal_endemico,"base/GRAVIDADE.xlsx")
 
 
 #Rt dos últimos 14 dias, limite superior
@@ -509,10 +514,23 @@ names(res_base_14_dias)[3] <- "LIMITE_SUPERIOR_Rt"
 ggplot(res_base_14_dias, aes(DATA, LIMITE_SUPERIOR_Rt, color = REGIAO))+
 	geom_line(size = 1.5)
 
-write_xlsx(res_base_14_dias,"base/rt_14_dias.xlsx")
+res_base_14_dias$RT_CONTROLADO <- ifelse(res_base_14_dias$LIMITE_SUPERIOR_Rt < 1, "Sim", "Não")
+
+res_base_14_dias_list <- list()
+for(i in 1:16){ # são 16 regiões
+	res_base_14_dias_cort <- subset(res_base_14_dias, as.numeric(res_base_14_dias$REGIAO) == i)
+	res_base_14_dias_cort$CRESCIMENTO <- ifelse(sum(tail(res_base_14_dias_cort$RT_CONTROLADO,14)=="Sim") == 14, "Moderado",
+					   ifelse(sum(tail(res_base_14_dias_cort$RT_CONTROLADO,7)=="Sim") == 7, "Alto",
+					          ifelse(sum(tail(res_base_14_dias_cort$RT_CONTROLADO,3)=="Sim") == 3, "Grave", "Gravíssimo")))
+	res_base_14_dias_cort <- tail(res_base_14_dias_cort,1)
+	res_base_14_dias_list[[i]] <- res_base_14_dias_cort
+}
+
+res_base_14_dias <- do.call(rbind, res_base_14_dias_list) %>% as.data.frame()
+write_xlsx(res_base_14_dias,"base/CRESCIMENTO.xlsx")
 
 
-#Casos ativos/ população
+#Infectantes/ população
 municip_regiao_pop <- read_excel("base/municip_regiao_pop.xls")
 municip_regiao_pop <- municip_regiao_pop %>%
 	group_by(REGIAO_DE_SAUDE) %>%
@@ -527,7 +545,92 @@ casos_ativos_populacao <- casos_ativos_populacao %>% select(REGIAO, DATA, ATIVOS
 ggplot(casos_ativos_populacao, aes(DATA, ATIVOS_POP, color = REGIAO))+
 	geom_line(size = 1.5)
 
-write_xlsx(casos_ativos_populacao,"base/casos_ativos_populacao.xlsx")
+casos_ativos_populacao$INFECTIVIDADE <- ifelse(casos_ativos_populacao$ATIVOS_POP <= 50, "Moderado",
+					ifelse(casos_ativos_populacao$ATIVOS_POP <= 100, "Alto",
+					       ifelse(casos_ativos_populacao$ATIVOS_POP <= 150, "Grave", "Gravíssimo")))
+
+casos_ativos_populacao_list <- list()
+for(i in 1:16){ # são 16 regiões
+	casos_ativos_populacao_cort <- subset(casos_ativos_populacao, as.numeric(casos_ativos_populacao$REGIAO) == i)
+	casos_ativos_populacao_cort <- tail(casos_ativos_populacao_cort,1)
+	casos_ativos_populacao_list[[i]] <- casos_ativos_populacao_cort
+}
+
+casos_ativos_populacao <- do.call(rbind, casos_ativos_populacao_list) %>% as.data.frame()
 
 
+write_xlsx(casos_ativos_populacao,"base/INFECTIVIDADE.xlsx")
+
+
+#cofirmados/suspeitos
+serie_agrupada_regioes <- read_excel("base/serie_agrupada_regioes.xlsx")
+serie_agrupada_regioes <- serie_agrupada_regioes %>% dplyr::select(dia, regiao, suspeitos, confirmados)
+serie_agrupada_regioes <- subset(serie_agrupada_regioes, serie_agrupada_regioes$regiao != "OUTROS ESTADOS")
+MEIO <- subset(serie_agrupada_regioes, serie_agrupada_regioes$regiao == "HERVAL D'OESTE" | #Herval D'Oestes é um município do meio oeste, mas está fora da região na base de dados
+                       serie_agrupada_regioes$regiao == "MEIO OESTE") #Por isso, somaram-se os dados para se ter o total do meio oeste
+MEIO <- MEIO %>%
+	group_by(dia) %>%
+	summarise(confirmados = sum(confirmados, na.rm = T),
+		  suspeitos = sum(suspeitos, na.rm = T))
+MEIO$regiao <- "MEIO OESTE" 
+
+serie_agrupada_regioes <- subset(serie_agrupada_regioes, serie_agrupada_regioes$regiao != "HERVAL D'OESTE" &
+                       serie_agrupada_regioes$regiao != "MEIO OESTE") 
+
+serie_agrupada_regioes <- rbind(serie_agrupada_regioes, MEIO) %>% as.data.frame()
+
+serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <- serie_agrupada_regioes$confirmados/serie_agrupada_regioes$suspeitos*100
+
+names(serie_agrupada_regioes) <- c("DATA", "REGIAO", "SUSPEITOS", "CONFIRMADOS", "TX_CONFIRMADOS_SUSPEITOS")
+serie_agrupada_regioes$DATA <- as.Date(serie_agrupada_regioes$DATA)
+
+ggplot(serie_agrupada_regioes, aes(DATA, SUSPEITOS, color = REGIAO))+
+	geom_line(size = 1.5)
+
+ggplot(serie_agrupada_regioes, aes(DATA, CONFIRMADOS, color = REGIAO))+
+	geom_line(size = 1.5)
+
+
+ggplot(serie_agrupada_regioes, aes(DATA, TX_CONFIRMADOS_SUSPEITOS, color = REGIAO))+
+	geom_line(size = 1.5)
+
+serie_agrupada_regioes$SENSIBILIDADE <- ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 3, "Moderado",
+					ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 6, "Alto",
+					       ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 9, "Grave", "Gravíssimo")))
+
+serie_agrupada_regioes_list <- list()
+for(i in 1:16){ # são 16 regiões
+	serie_agrupada_regioes_cort <- subset(serie_agrupada_regioes, as.numeric(as.factor(serie_agrupada_regioes$REGIAO)) == i)
+	serie_agrupada_regioes_cort <- tail(serie_agrupada_regioes_cort,1)
+	serie_agrupada_regioes_list[[i]] <- serie_agrupada_regioes_cort
+}
+
+serie_agrupada_regioes <- do.call(rbind, serie_agrupada_regioes_list) %>% as.data.frame()
+
+write_xlsx(serie_agrupada_regioes,"base/SENSIBILIDADE.xlsx")
+
+
+#Efeito de desenho do inquérito de síndrome gripal
+efeito_desenho <- read_excel("base/efeito_desenho.xlsx")
+
+efeito_desenho$VIGILANCIA_ATIVA <- ifelse(efeito_desenho$EFEITO_DESENHO <= 1, "Moderado",
+					ifelse(efeito_desenho$EFEITO_DESENHO <= 1.5, "Alto",
+					       ifelse(efeito_desenho$EFEITO_DESENHO <= 2, "Grave", 
+					              ifelse(efeito_desenho$EFEITO_DESENHO > 2 |
+					                     efeito_desenho$EFEITO_DESENHO == "NÃO REALIZADO", "Gravíssimo", NA))))
+
+
+write_xlsx(efeito_desenho,"base/VIGILANCIA_ATIVA.xlsx")
+
+# Análise das dimensões ---------------------------------------------------
+matriz <- obitos_canal_endemico
+matriz <- merge(matriz, res_base_14_dias, by = c("REGIAO"), all = T)
+matriz <- merge(matriz, casos_ativos_populacao, by = c("REGIAO"), all = T)
+matriz <- merge(matriz, serie_agrupada_regioes, by = c("REGIAO"), all = T)
+matriz <- merge(matriz, efeito_desenho, by = c("REGIAO"), all = T)
+
+
+
+matriz <- matriz %>% select(REGIAO, GRAVIDADE, CRESCIMENTO, INFECTIVIDADE, SENSIBILIDADE, VIGILANCIA_ATIVA)
+write_xlsx(matriz,"base/matriz.xlsx")
 
