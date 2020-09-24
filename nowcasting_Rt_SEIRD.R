@@ -15,6 +15,7 @@ library(foreign)
 library(googlesheets4)
 library(reshape2)
 library(RcppRoll)
+library(writexl)
 
 
 # Nowcasting --------------------------------------------------------------------
@@ -321,9 +322,6 @@ for(i in 1:16){ # são 16 regiões
 
 res_base <- do.call(rbind, res_base_list)	
 
-ggplot(res_base, aes(DATA, IC975, color = REGIAO))+
-	geom_line()
-
 
 
 # Forecast do número de casos e dos óbitos --------------------------------
@@ -478,6 +476,58 @@ ggplot(projecoes_final, aes(DATA, CUM_OBITOS_CENARIO_3, color = REGIAO))+
 
 
 
+# Cálculo dos indicadores -------------------------------------------------
+#Óbitos por SRAG
+obitos_proj <- projecoes_final %>% select(REGIAO, DATA, CUM_OBITOS_CENARIO_1, CUM_OBITOS_CENARIO_2, CUM_OBITOS_CENARIO_3)
+obitos_proj <- subset(obitos_proj, obitos_proj$DATA >= Sys.Date() &
+			 	obitos_proj$DATA < (Sys.Date()+15))
+obitos_proj_list <- list()
+for(i in 1:16){ # são 16 regiões
+	obitos_cort <- subset(obitos_proj, as.numeric(obitos_proj$REGIAO) == i)
+	obitos_cort$OBITOS_CENARIO_1 <- obitos_cort$CUM_OBITOS_CENARIO_1 - lag(obitos_cort$CUM_OBITOS_CENARIO_1,1)
+	obitos_cort$OBITOS_CENARIO_2 <- obitos_cort$CUM_OBITOS_CENARIO_2 - lag(obitos_cort$CUM_OBITOS_CENARIO_2,1)
+	obitos_cort$OBITOS_CENARIO_3 <- obitos_cort$CUM_OBITOS_CENARIO_3 - lag(obitos_cort$CUM_OBITOS_CENARIO_3,1)
+	obitos_cort$CUM_OBITOS_CENARIO_1 <- NULL
+	obitos_cort$CUM_OBITOS_CENARIO_2 <- NULL
+	obitos_cort$CUM_OBITOS_CENARIO_3 <- NULL
+	obitos_proj_list[[i]] <- obitos_cort
+}
+obitos_proj <- do.call(rbind, obitos_proj_list)
+
+obitos_proj <- obitos_proj %>% 
+	group_by(REGIAO) %>%
+	summarise(OBITOS_CENARIO_1 = sum(OBITOS_CENARIO_1, na.rm = T),
+		  OBITOS_CENARIO_2 = sum(OBITOS_CENARIO_2, na.rm = T),
+		  OBITOS_CENARIO_3 = sum(OBITOS_CENARIO_3, na.rm = T))
+
+
+
+#Rt dos últimos 14 dias, limite superior
+res_base_14_dias <- subset(res_base, res_base$DATA >= (Sys.Date()-14))
+res_base_14_dias <- res_base_14_dias %>% dplyr::select(REGIAO, DATA, IC975)
+names(res_base_14_dias)[3] <- "LIMITE_SUPERIOR_Rt"
+ggplot(res_base_14_dias, aes(DATA, LIMITE_SUPERIOR_Rt, color = REGIAO))+
+	geom_line(size = 1.5)
+
+write_xlsx(res_base_14_dias,"base/rt_14_dias.xlsx")
+
+
+#Casos ativos/ população
+municip_regiao_pop <- read_excel("base/municip_regiao_pop.xls")
+municip_regiao_pop <- municip_regiao_pop %>%
+	group_by(REGIAO_DE_SAUDE) %>%
+	summarise(POP = sum(POP_2020, na.rm = T))
+
+names(municip_regiao_pop)[1] <- "REGIAO" 
+
+casos_ativos_populacao <- merge(base_nowcasted, municip_regiao_pop, by = "REGIAO", all= T)
+casos_ativos_populacao$ATIVOS_POP <- casos_ativos_populacao$INFECTANTES/casos_ativos_populacao$POP*100000
+casos_ativos_populacao <- casos_ativos_populacao %>% select(REGIAO, DATA, ATIVOS_POP)
+
+ggplot(casos_ativos_populacao, aes(DATA, ATIVOS_POP, color = REGIAO))+
+	geom_line(size = 1.5)
+
+write_xlsx(casos_ativos_populacao,"base/casos_ativos_populacao.xlsx")
 
 
 
