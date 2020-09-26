@@ -497,6 +497,8 @@ obitos_proj <- obitos_proj %>%
 	summarise(OBITOS_CENARIO_3 = sum(OBITOS_CENARIO_3, na.rm = T))
 
 canal_endemico <- read_excel("base/canal_endemico.xlsx")
+canal_endemico$`100%` <- NULL
+names(canal_endemico) <- c("REGIAO", "PRIM_QUARTIL", "SEGUND_QUARTIL", "TERC_QUARTIL")
 
 obitos_canal_endemico <- merge(obitos_proj, canal_endemico, by = "REGIAO", all = T)
 
@@ -594,9 +596,9 @@ ggplot(serie_agrupada_regioes, aes(DATA, CONFIRMADOS, color = REGIAO))+
 ggplot(serie_agrupada_regioes, aes(DATA, TX_CONFIRMADOS_SUSPEITOS, color = REGIAO))+
 	geom_line(size = 1.5)
 
-serie_agrupada_regioes$SENSIBILIDADE <- ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 6, "Moderado",
-					ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 9, "Alto",
-					       ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 12, "Grave", "Gravíssimo")))
+serie_agrupada_regioes$SENSIBILIDADE <- ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 12, "Moderado",
+					ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 24, "Alto",
+					       ifelse(serie_agrupada_regioes$TX_CONFIRMADOS_SUSPEITOS <= 36, "Grave", "Gravíssimo")))
 
 serie_agrupada_regioes_list <- list()
 for(i in 1:16){ # são 16 regiões
@@ -613,11 +615,10 @@ write_xlsx(serie_agrupada_regioes,"base/SENSIBILIDADE.xlsx")
 #Efeito de desenho do inquérito de síndrome gripal
 efeito_desenho <- read_excel("base/efeito_desenho.xlsx")
 
-efeito_desenho$VIGILANCIA_ATIVA <- ifelse(efeito_desenho$EFEITO_DESENHO <= 1, "Moderado",
-					ifelse(efeito_desenho$EFEITO_DESENHO <= 1.5, "Alto",
-					       ifelse(efeito_desenho$EFEITO_DESENHO <= 2, "Grave", 
-					              ifelse(efeito_desenho$EFEITO_DESENHO > 2 |
-					                     efeito_desenho$EFEITO_DESENHO == "NÃO REALIZADO", "Gravíssimo", NA))))
+efeito_desenho$VIGILANCIA_ATIVA <- ifelse(efeito_desenho$EFEITO_DESENHO <= 1.5, "Moderado",
+					ifelse(efeito_desenho$EFEITO_DESENHO <= 2, "Alto",
+					       ifelse(efeito_desenho$EFEITO_DESENHO > 2, "Grave", 
+					              ifelse(efeito_desenho$EFEITO_DESENHO == "NÃO REALIZADO", "Gravíssimo", NA))))
 
 
 write_xlsx(efeito_desenho,"base/VIGILANCIA_ATIVA.xlsx")
