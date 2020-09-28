@@ -25,7 +25,7 @@ analise <- canal_endemico %>%
 	group_by(DATA) %>%
 	summarise(OBITOS = sum(OBITOS, na.rm = T))
 
-canal_endemico$OBITOS <- canal_endemico$OBITOS/12 # Fazendo uma média por semana
+canal_endemico$OBITOS <- canal_endemico$OBITOS/12 # Fazendo uma média por mês
 
 canal_endemico <- subset(canal_endemico, canal_endemico$DATA %in% c("2015","2017","2018")) #retirando 2016 e 2019, pois são outliers
 canal_endemico <- dcast(REGIAO ~ DATA ,data = canal_endemico)

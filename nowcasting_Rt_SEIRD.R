@@ -18,6 +18,17 @@ library(RcppRoll)
 library(writexl)
 
 
+
+# População das regiões ---------------------------------------------------
+municip_regiao_pop <- read_excel("base/municip_regiao_pop.xls")
+municip_regiao_pop <- municip_regiao_pop %>%
+	group_by(REGIAO_DE_SAUDE) %>%
+	summarise(POP = sum(POP_2020, na.rm = T))
+
+names(municip_regiao_pop)[1] <- "REGIAO" 
+
+
+
 # Nowcasting --------------------------------------------------------------------
 #Utiliza-se os dados de casos confirmados do estado de SC 
 #Disponível em: http://dados.sc.gov.br/dataset/covid-19-dados-anonimizados-de-casos-confirmados
@@ -533,13 +544,6 @@ write_xlsx(res_base_14_dias,"base/CRESCIMENTO.xlsx")
 
 
 #Infectantes/ população
-municip_regiao_pop <- read_excel("base/municip_regiao_pop.xls")
-municip_regiao_pop <- municip_regiao_pop %>%
-	group_by(REGIAO_DE_SAUDE) %>%
-	summarise(POP = sum(POP_2020, na.rm = T))
-
-names(municip_regiao_pop)[1] <- "REGIAO" 
-
 casos_ativos_populacao <- merge(base_nowcasted, municip_regiao_pop, by = "REGIAO", all= T)
 casos_ativos_populacao$ATIVOS_POP <- casos_ativos_populacao$INFECTANTES/casos_ativos_populacao$POP*100000
 casos_ativos_populacao <- casos_ativos_populacao %>% select(REGIAO, DATA, ATIVOS_POP)
