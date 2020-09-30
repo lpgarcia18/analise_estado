@@ -489,35 +489,59 @@ ggplot(projecoes_final, aes(DATA, CUM_OBITOS_CENARIO_3, color = REGIAO))+
 
 # Cálculo dos indicadores -------------------------------------------------
 #Óbitos por SRAG
-obitos_proj <- projecoes_final %>% select(REGIAO, DATA, CUM_OBITOS_CENARIO_1, CUM_OBITOS_CENARIO_2, CUM_OBITOS_CENARIO_3)
-obitos_proj <- subset(obitos_proj, obitos_proj$DATA >= Sys.Date() &
-			 	obitos_proj$DATA < (Sys.Date()+31))
-obitos_proj_list <- list()
+# obitos_proj <- projecoes_final %>% select(REGIAO, DATA, CUM_OBITOS_CENARIO_1, CUM_OBITOS_CENARIO_2, CUM_OBITOS_CENARIO_3)
+# obitos_proj <- subset(obitos_proj, obitos_proj$DATA >= Sys.Date() &
+# 			 	obitos_proj$DATA < (Sys.Date()+31))
+# obitos_proj_list <- list()
+# for(i in 1:16){ # são 16 regiões
+# 	obitos_cort <- subset(obitos_proj, as.numeric(obitos_proj$REGIAO) == i)
+# 	obitos_cort$OBITOS_CENARIO_3 <- obitos_cort$CUM_OBITOS_CENARIO_3 - lag(obitos_cort$CUM_OBITOS_CENARIO_3,1)
+# 	obitos_cort$CUM_OBITOS_CENARIO_1 <- NULL
+# 	obitos_cort$CUM_OBITOS_CENARIO_2 <- NULL
+# 	obitos_cort$CUM_OBITOS_CENARIO_3 <- NULL
+# 	obitos_proj_list[[i]] <- obitos_cort
+# }
+# obitos_proj <- do.call(rbind, obitos_proj_list)
+# 
+# obitos_proj <- obitos_proj %>% 
+# 	group_by(REGIAO) %>%
+# 	summarise(OBITOS_CENARIO_3 = sum(OBITOS_CENARIO_3, na.rm = T))
+# 
+# canal_endemico <- read_excel("base/canal_endemico.xlsx")
+# canal_endemico$`100%` <- NULL
+# names(canal_endemico) <- c("REGIAO", "PRIM_QUARTIL", "SEGUND_QUARTIL", "TERC_QUARTIL")
+# 
+# obitos_canal_endemico <- merge(obitos_proj, canal_endemico, by = "REGIAO", all = T)
+# 
+# obitos_canal_endemico$GRAVIDADE <- ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$PRIM_QUARTIL, "Moderado",
+# 					ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$SEGUND_QUARTIL, "Alto",
+# 					       ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$TERC_QUARTIL, "Grave", "Gravíssimo")))
+# 
+# write_xlsx(obitos_canal_endemico,"base/GRAVIDADE.xlsx")
+
+
+casos_novos <- base_nowcasted
+casos_novos_list <- list()
 for(i in 1:16){ # são 16 regiões
-	obitos_cort <- subset(obitos_proj, as.numeric(obitos_proj$REGIAO) == i)
-	obitos_cort$OBITOS_CENARIO_3 <- obitos_cort$CUM_OBITOS_CENARIO_3 - lag(obitos_cort$CUM_OBITOS_CENARIO_3,1)
-	obitos_cort$CUM_OBITOS_CENARIO_1 <- NULL
-	obitos_cort$CUM_OBITOS_CENARIO_2 <- NULL
-	obitos_cort$CUM_OBITOS_CENARIO_3 <- NULL
-	obitos_proj_list[[i]] <- obitos_cort
+	casos_novos_cort <- subset(casos_novos, as.numeric(casos_novos$REGIAO) == i)
+	casos_novos_cort <- subset(casos_novos_cort, casos_novos_cort$DATA < Sys.Date() &
+				   	casos_novos_cort$DATA >= (Sys.Date()-15))
+	casos_novos_cort <- casos_novos_cort %>% dplyr::select(REGIAO, CASOS)
+	casos_novos_cort <- casos_novos_cort %>% 
+		group_by(REGIAO) %>%
+		summarise(CASOS = sum(CASOS, na.rm = T))
+	casos_novos_list[[i]] <- casos_novos_cort
 }
-obitos_proj <- do.call(rbind, obitos_proj_list)
+	
+casos_novos <- do.call(rbind, casos_novos_list)	
+casos_novos <- merge(casos_novos, municip_regiao_pop, by = "REGIAO", all = T)
+casos_novos$PLATO_INCIDENCIA <- casos_novos$CASOS/casos_novos$POP*100000
+	
+casos_novos$GRAVIDADE <- ifelse(casos_novos$PLATO_INCIDENCIA <= 10, "Moderado",
+					ifelse(casos_novos$PLATO_INCIDENCIA <= 20, "Alto",
+					       ifelse(casos_novos$PLATO_INCIDENCIA <= 30, "Grave", "Gravíssimo")))
 
-obitos_proj <- obitos_proj %>% 
-	group_by(REGIAO) %>%
-	summarise(OBITOS_CENARIO_3 = sum(OBITOS_CENARIO_3, na.rm = T))
-
-canal_endemico <- read_excel("base/canal_endemico.xlsx")
-canal_endemico$`100%` <- NULL
-names(canal_endemico) <- c("REGIAO", "PRIM_QUARTIL", "SEGUND_QUARTIL", "TERC_QUARTIL")
-
-obitos_canal_endemico <- merge(obitos_proj, canal_endemico, by = "REGIAO", all = T)
-
-obitos_canal_endemico$GRAVIDADE <- ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$PRIM_QUARTIL, "Moderado",
-					ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$SEGUND_QUARTIL, "Alto",
-					       ifelse(obitos_canal_endemico$OBITOS_CENARIO_3 <= obitos_canal_endemico$TERC_QUARTIL, "Grave", "Gravíssimo")))
-
-write_xlsx(obitos_canal_endemico,"base/GRAVIDADE.xlsx")
+write_xlsx(casos_novos,"base/GRAVIDADE.xlsx")
 
 
 #Rt dos últimos 14 dias, limite superior
@@ -544,28 +568,28 @@ write_xlsx(res_base_14_dias,"base/CRESCIMENTO.xlsx")
 
 
 #Infectantes/ população
-casos_ativos_populacao <- merge(base_nowcasted, municip_regiao_pop, by = "REGIAO", all= T)
-casos_ativos_populacao$ATIVOS_POP <- casos_ativos_populacao$INFECTANTES/casos_ativos_populacao$POP*100000
-casos_ativos_populacao <- casos_ativos_populacao %>% select(REGIAO, DATA, ATIVOS_POP)
-
-ggplot(casos_ativos_populacao, aes(DATA, ATIVOS_POP, color = REGIAO))+
-	geom_line(size = 1.5)
-
-casos_ativos_populacao$INFECTIVIDADE <- ifelse(casos_ativos_populacao$ATIVOS_POP <= 50, "Moderado",
-					ifelse(casos_ativos_populacao$ATIVOS_POP <= 100, "Alto",
-					       ifelse(casos_ativos_populacao$ATIVOS_POP <= 150, "Grave", "Gravíssimo")))
-
-casos_ativos_populacao_list <- list()
-for(i in 1:16){ # são 16 regiões
-	casos_ativos_populacao_cort <- subset(casos_ativos_populacao, as.numeric(casos_ativos_populacao$REGIAO) == i)
-	casos_ativos_populacao_cort <- tail(casos_ativos_populacao_cort,1)
-	casos_ativos_populacao_list[[i]] <- casos_ativos_populacao_cort
-}
-
-casos_ativos_populacao <- do.call(rbind, casos_ativos_populacao_list) %>% as.data.frame()
-
-
-write_xlsx(casos_ativos_populacao,"base/INFECTIVIDADE.xlsx")
+# casos_ativos_populacao <- merge(base_nowcasted, municip_regiao_pop, by = "REGIAO", all= T)
+# casos_ativos_populacao$ATIVOS_POP <- casos_ativos_populacao$INFECTANTES/casos_ativos_populacao$POP*100000
+# casos_ativos_populacao <- casos_ativos_populacao %>% select(REGIAO, DATA, ATIVOS_POP)
+# 
+# ggplot(casos_ativos_populacao, aes(DATA, ATIVOS_POP, color = REGIAO))+
+# 	geom_line(size = 1.5)
+# 
+# casos_ativos_populacao$INFECTIVIDADE <- ifelse(casos_ativos_populacao$ATIVOS_POP <= 50, "Moderado",
+# 					ifelse(casos_ativos_populacao$ATIVOS_POP <= 100, "Alto",
+# 					       ifelse(casos_ativos_populacao$ATIVOS_POP <= 150, "Grave", "Gravíssimo")))
+# 
+# casos_ativos_populacao_list <- list()
+# for(i in 1:16){ # são 16 regiões
+# 	casos_ativos_populacao_cort <- subset(casos_ativos_populacao, as.numeric(casos_ativos_populacao$REGIAO) == i)
+# 	casos_ativos_populacao_cort <- tail(casos_ativos_populacao_cort,1)
+# 	casos_ativos_populacao_list[[i]] <- casos_ativos_populacao_cort
+# }
+# 
+# casos_ativos_populacao <- do.call(rbind, casos_ativos_populacao_list) %>% as.data.frame()
+# 
+# 
+# write_xlsx(casos_ativos_populacao,"base/INFECTIVIDADE.xlsx")
 
 
 #cofirmados/suspeitos
@@ -643,16 +667,18 @@ ocupacao_uti$CAPACIDADE_UTI <- ifelse(ocupacao_uti$TX_OCUPACAO_UTI <= 50, "Moder
 
 
 # Análise dos indicadores ---------------------------------------------------
-situacao_indicadores <- obitos_canal_endemico
+#situacao_indicadores <- obitos_canal_endemico
+situacao_indicadores <- casos_novos
 situacao_indicadores <- merge(situacao_indicadores, res_base_14_dias, by = c("REGIAO"), all = T)
-situacao_indicadores <- merge(situacao_indicadores, casos_ativos_populacao, by = c("REGIAO"), all = T)
+#situacao_indicadores <- merge(situacao_indicadores, casos_ativos_populacao, by = c("REGIAO"), all = T)
 situacao_indicadores <- merge(situacao_indicadores, serie_agrupada_regioes, by = c("REGIAO"), all = T)
 situacao_indicadores <- merge(situacao_indicadores, efeito_desenho, by = c("REGIAO"), all = T)
 situacao_indicadores <- merge(situacao_indicadores, ocupacao_uti, by = c("REGIAO"), all = T)
 
 
 
-situacao_indicadores <- situacao_indicadores %>% select(REGIAO, GRAVIDADE, CRESCIMENTO, INFECTIVIDADE, SENSIBILIDADE, VIGILANCIA_ATIVA, CAPACIDADE_UTI)
+situacao_indicadores <- situacao_indicadores %>% select(REGIAO, GRAVIDADE, CRESCIMENTO, #INFECTIVIDADE, 
+							SENSIBILIDADE, VIGILANCIA_ATIVA, CAPACIDADE_UTI)
 write_xlsx(situacao_indicadores,"base/situacao_indicadores.xlsx")
 
 pontuacao_indicadores <- situacao_indicadores
@@ -667,10 +693,10 @@ pontuacao_indicadores[pontuacao_indicadores$CRESCIMENTO == "Alto", names(pontuac
 pontuacao_indicadores[pontuacao_indicadores$CRESCIMENTO == "Grave", names(pontuacao_indicadores) == "CRESCIMENTO"] <- 30 
 pontuacao_indicadores[pontuacao_indicadores$CRESCIMENTO == "Gravíssimo", names(pontuacao_indicadores) == "CRESCIMENTO"] <- 50 
 
-pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Moderado", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 5 
-pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Alto", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 15 
-pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Grave", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 30 
-pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Gravíssimo", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 50 
+# pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Moderado", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 5 
+# pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Alto", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 15 
+# pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Grave", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 30 
+# pontuacao_indicadores[pontuacao_indicadores$INFECTIVIDADE == "Gravíssimo", names(pontuacao_indicadores) == "INFECTIVIDADE"] <- 50 
 
 pontuacao_indicadores[pontuacao_indicadores$SENSIBILIDADE == "Moderado", names(pontuacao_indicadores) == "SENSIBILIDADE"] <- 5 
 pontuacao_indicadores[pontuacao_indicadores$SENSIBILIDADE == "Alto", names(pontuacao_indicadores) == "SENSIBILIDADE"] <- 15 
@@ -692,7 +718,8 @@ pontuacao_indicadores[pontuacao_indicadores$CAPACIDADE_UTI == "Gravíssimo", nam
 pontuacao_dimensoes <- pontuacao_indicadores
 pontuacao_dimensoes[,-1] <- lapply(pontuacao_dimensoes[,-1], as.numeric) %>% as.data.frame() 
 pontuacao_dimensoes$EVENTO_SENTINELA <- pontuacao_dimensoes$GRAVIDADE
-pontuacao_dimensoes$TRANSMISSIBILIDADE <- (pontuacao_dimensoes$CRESCIMENTO + pontuacao_dimensoes$INFECTIVIDADE)/2
+#pontuacao_dimensoes$TRANSMISSIBILIDADE <- (pontuacao_dimensoes$CRESCIMENTO + pontuacao_dimensoes$INFECTIVIDADE)/2
+pontuacao_dimensoes$TRANSMISSIBILIDADE <- pontuacao_dimensoes$CRESCIMENTO 
 pontuacao_dimensoes$MONITORAMENTO <- (pontuacao_dimensoes$SENSIBILIDADE + pontuacao_dimensoes$VIGILANCIA_ATIVA)/2
 pontuacao_dimensoes$CAPACIDADE_DE_ATENCAO <- pontuacao_dimensoes$CAPACIDADE_UTI
 pontuacao_dimensoes <- pontuacao_dimensoes %>% dplyr::select(REGIAO, EVENTO_SENTINELA, TRANSMISSIBILIDADE,
